@@ -1,0 +1,41 @@
+{
+    "name": "sessel/thinkphp-oss-filesystem",
+    "description": "oss filesystem for thinkphp",
+    "type": "library",
+    "license": "MIT",
+     "require": {
+        "php": ">=8.0",
+        "volcengine/ve-tos-php-sdk": "^2.1",
+        "alibabacloud/oss-v2": "^0.3",
+        "topthink/think-filesystem": "^3.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "~9.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Sessel\\ThinkphpOssFilesystem\\": "src/",
+            "think\\filesystem\\driver\\": "src/Driver/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Sessel\\VeTosThinkphp\\Tests\\": "tests/"
+        }
+    },
+    "authors": [
+        {
+            "name": "wangtao",
+            "email": "wangtao861024@gmail.com"
+        }
+    ],
+    "extra": {
+        "think":{
+            "services":[
+                "Sessel\\ThinkphpOssFilesystem\\Service"
+            ],
+            "config":{
+            }
+        }
+    }
+}
