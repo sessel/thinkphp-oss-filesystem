@@ -51,6 +51,11 @@ class Aliyun extends Driver
         return $this->adapter;
     }
 
+    public function getConfig(): array
+    {
+        return $this->config;
+    }
+
     protected function validateConfig(): void
     {
         $required = ['bucket', 'access_key_id', 'access_key_secret', 'endpoint'];
