@@ -455,7 +455,7 @@ class AliyunAdapter implements FilesystemAdapter
         return $this->config['cdn_url'] ? rtrim($this->config['cdn_url'], '/') : $this->getBucketDomain();
     }
 
-    public function getStsToken(){
+    public function getStsToken(int $durationSeconds = 3600){
         // Constants
         $StsSignVersion = "1.0";
         $StsAPIVersion = "2015-04-01";
@@ -477,7 +477,7 @@ class AliyunAdapter implements FilesystemAdapter
             "Version" => $StsAPIVersion,
             "Action" => "AssumeRole",
             "SignatureNonce" => $uuid,
-            "DurationSeconds" => 3600
+            "DurationSeconds" => $durationSeconds
         ]);
         parse_str($queryStr, $queryParams);
         ksort($queryParams);
