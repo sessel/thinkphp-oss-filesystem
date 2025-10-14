@@ -1,21 +1,38 @@
 # Volcengine Object Storage(TOS) filesystem for ThinkPHP
-火山TOS对象存储Filesystem扩展, 基于 `topthink/think-filesystem` 和 `volcengine/ve-tos-php-sdk`
+Thinkphp对象存储Filesystem扩展, 基于 `topthink/think-filesystem`
 
 ## 安装
 ```
 # ThinkPHP 6.x
-composer require sessel/ve-tos-thinkphp:^1.0
+composer require sessel/thinkphp-oss-filesystem:^1.0
 
 # ThinkPHP 8.x
-composer require sessel/ve-tos-thinkphp:^2.0
+composer require sessel/thinkphp-oss-filesystem:^2.0
 ```
 
 ## 配置
 ```
 # config/filesystem.php
 ...
-'oss' => [
-    'type' => \Sessel\VeTosThinkphp\Driver\VeTos::class,
+//阿里云OSS
+'aliyun' => [
+    'type' => 'aliyun',
+    'region' => 'region',
+    'bucket' => 'bucket',
+    'access_key_id' => 'access_key_id',
+    'access_key_secret' => 'access_key_secret',
+    'security_token' => null,
+    'endpoint' => 'endpoint',
+    'use_ssl' => true,
+    'prefix' => 'prefix',
+    'url' => '',
+    'cdn_url' => '',
+    'ram_role_arn' => 'ram_role_arn',
+    'error_handler' => null,
+]
+//火山云TOS
+'vetos' => [
+    'type' => 'vetos',
     'ak' => 'ak',
     'sk' => 'sk',
     'region' => 'region',
@@ -32,7 +49,7 @@ composer require sessel/ve-tos-thinkphp:^2.0
 use think\facade\Filesystem;
 use GuzzleHttp\Psr7\Utils;
 
-$disk = Filesystem::disk('oss');
+$disk = Filesystem::disk('aliyun');
 // $gen = $disk->listContents('/');
 // $files = [];
 // foreach($gen as $file){
@@ -52,7 +69,8 @@ $disk = Filesystem::disk('oss');
 // for ($i = 0; $i < 20000; $i++) {
 //     $content .= uniqid();
 // }
-// $veTosAdapter = app('oss.vengine_tos', ['config' => config('filesystem.disks.oss')]);
+// $veTosAdapter = app('oss.volcengine', ['config' => config('filesystem.disks.oss')]);
+// $veTosAdapter = $disk->getAdapter();
 // halt($veTosAdapter->appendWrite('test_append2.txt', $content, new Config(['next_append_offset' => 260000])));
 // halt($disk->visibility('test.txt'));
 // halt($disk->fileSize('test_append.txt'));
