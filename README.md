@@ -1,4 +1,4 @@
-# Volcengine Object Storage(TOS) filesystem for ThinkPHP
+# Object Storage filesystem for ThinkPHP
 Thinkphp对象存储Filesystem扩展, 基于 `topthink/think-filesystem`
 
 ## 安装
