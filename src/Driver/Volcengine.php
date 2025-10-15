@@ -81,9 +81,4 @@ class Volcengine extends Driver
             }
         }
     }
-
-    public function getConfig(): array
-    {
-        return $this->config;
-    }
 }

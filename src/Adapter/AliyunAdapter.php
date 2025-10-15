@@ -15,6 +15,9 @@ use AlibabaCloud\Oss\V2\Models\ObjectAclRequest;
 use AlibabaCloud\Oss\V2\Models\PutObjectAclRequest;
 use AlibabaCloud\Oss\V2\Credentials\StaticCredentialsProvider;
 use AlibabaCloud\Oss\V2\Config as AliyunOssConfig;
+use AlibabaCloud\SDK\Sts\V20150401\Sts;
+use AlibabaCloud\Tea\Exception\TeaError;
+use Darabonba\OpenApi\Models\Config as ModelConfig;
 use League\Flysystem\Config;
 use League\Flysystem\FileAttributes;
 use League\Flysystem\FilesystemAdapter;
@@ -455,46 +458,294 @@ class AliyunAdapter implements FilesystemAdapter
         return $this->config['cdn_url'] ? rtrim($this->config['cdn_url'], '/') : $this->getBucketDomain();
     }
 
-    public function getStsToken(int $durationSeconds = 3600){
-        // Constants
-        $StsSignVersion = "1.0";
-        $StsAPIVersion = "2015-04-01";
-        $StsHost = "https://sts.aliyuncs.com/";
-        $TimeFormat = "Y-m-d\TH:i:s\Z";
-        $RespBodyFormat = "JSON";
-        $PercentEncode = "%2F";
-        $HTTPGet = "GET";
-        $uuid = "Nonce-" . rand(1000, 9999);
-        $currentTime = (new \DateTime('now', new \DateTimeZone('UTC')))->format($TimeFormat);
-        $queryStr = http_build_query([
-            "SignatureVersion" => $StsSignVersion,
-            "Format" => $RespBodyFormat,
-            "Timestamp" => $currentTime,
-            "RoleArn" => $this->config['ram_role_arn'],
-            "RoleSessionName" => "oss_test_sess",
-            "AccessKeyId" => $this->config['access_key_id'],
-            "SignatureMethod" => "HMAC-SHA1",
-            "Version" => $StsAPIVersion,
-            "Action" => "AssumeRole",
-            "SignatureNonce" => $uuid,
-            "DurationSeconds" => $durationSeconds
-        ]);
-        parse_str($queryStr, $queryParams);
-        ksort($queryParams);
-        $queryStr = http_build_query($queryParams);
-        $strToSign = $HTTPGet . "&" . $PercentEncode . "&" . rawurlencode($queryStr);
-        $signature = base64_encode(hash_hmac('sha1', $strToSign, $this->config['access_key_secret'] . "&", true));
-        $assumeURL = $StsHost . "?" . $queryStr . "&Signature=" . urlencode($signature);
-        $httpClient = new \GuzzleHttp\Client();
-        try {
-            $resp = $httpClient->get($assumeURL);
-            $result = json_decode($resp->getBody()->getContents(), true);
-            if (json_last_error() !== JSON_ERROR_NONE) {
-                throw new \Exception("Failed to decode JSON response");
-            }
-            return $result;
-        } catch (\Throwable $e) {
-            throw $e;
+    // public function getStsToken(int $durationSeconds = 3600){
+    //     // Constants
+    //     $StsSignVersion = "1.0";
+    //     $StsAPIVersion = "2015-04-01";
+    //     $StsHost = "https://sts.aliyuncs.com/";
+    //     $TimeFormat = "Y-m-d\TH:i:s\Z";
+    //     $RespBodyFormat = "JSON";
+    //     $PercentEncode = "%2F";
+    //     $HTTPGet = "GET";
+    //     $uuid = "Nonce-" . rand(1000, 9999);
+    //     $currentTime = (new \DateTime('now', new \DateTimeZone('UTC')))->format($TimeFormat);
+    //     $queryStr = http_build_query([
+    //         "SignatureVersion" => $StsSignVersion,
+    //         "Format" => $RespBodyFormat,
+    //         "Timestamp" => $currentTime,
+    //         "RoleArn" => $this->config['ram_role_arn'],
+    //         "RoleSessionName" => "oss_test_sess",
+    //         "AccessKeyId" => $this->config['access_key_id'],
+    //         "SignatureMethod" => "HMAC-SHA1",
+    //         "Version" => $StsAPIVersion,
+    //         "Action" => "AssumeRole",
+    //         "SignatureNonce" => $uuid,
+    //         "DurationSeconds" => $durationSeconds
+    //     ]);
+    //     parse_str($queryStr, $queryParams);
+    //     ksort($queryParams);
+    //     $queryStr = http_build_query($queryParams);
+    //     $strToSign = $HTTPGet . "&" . $PercentEncode . "&" . rawurlencode($queryStr);
+    //     $signature = base64_encode(hash_hmac('sha1', $strToSign, $this->config['access_key_secret'] . "&", true));
+    //     $assumeURL = $StsHost . "?" . $queryStr . "&Signature=" . urlencode($signature);
+    //     $httpClient = new \GuzzleHttp\Client();
+    //     try {
+    //         $resp = $httpClient->get($assumeURL);
+    //         $result = json_decode($resp->getBody()->getContents(), true);
+    //         if (json_last_error() !== JSON_ERROR_NONE) {
+    //             throw new \Exception("Failed to decode JSON response");
+    //         }
+    //         return $result;
+    //     } catch (\Throwable $e) {
+    //         throw $e;
+    //     }
+    // }
+
+    /**
+     * 获取STS令牌
+     * alibabacloud/sts-20150401 1.1.5 版本存在 Error: Call to undefined method Darabonba\OpenApi\Utils::getEndpointRules() 错误, 固定1.1.4版本解决
+     * @param durationSeconds 有效时长，单位：秒
+     */
+    public function sts(
+        int $durationSeconds = 3600,
+        ?string $roleSessionName = null,
+        array $action = [],
+        string $resource = '',
+        array $conditions = [],
+    ){
+        if(empty($action)){
+            $action = [
+                "oss:PutObject", // 允许上传操作
+                "oss:InitiateMultipartUpload", // 若支持分片上传，需添加此权限
+                "oss:UploadPart",
+                "oss:CompleteMultipartUpload"
+            ];
         }
+        // 限制操作的资源（整个Bucket或特定路径）
+        if(empty($resource)){
+            $resource = $this->config['prefix'] ? "acs:oss:*:*:{$this->config['bucket']}/*" : "acs:oss:*:*:{$this->config['bucket']}/{$this->config['prefix']}/*";
+        }
+
+        $policy = [
+            "Version" => "1",
+            "Statement" => [
+                [
+                    "Effect" => "Allow",
+                    "Action" => $action,
+                    "Resource" => $resource,
+                ]
+            ]
+        ];
+        if(!empty($conditions)){
+            $policy['Condition'] = $conditions;
+        }
+        try {
+            // 1. 初始化配置
+            $config = new ModelConfig([
+                "accessKeyId" => $this->config['access_key_id'],
+                "accessKeySecret" => $this->config['access_key_secret'],
+                "regionId" => $this->config['region']
+            ]);
+
+            // 2. 创建STS客户端
+            $client = new Sts($config);
+
+            // 3. 构造AssumeRole请求参数
+            $assumeRoleRequest = new \AlibabaCloud\SDK\Sts\V20150401\Models\AssumeRoleRequest([
+                "roleArn" => $this->config['ram_role_arn'],
+                "roleSessionName" => $roleSessionName ?? 'testRoleSessionName',
+                "durationSeconds" => $durationSeconds,
+                //添加Policy限制权限（如文件大小、操作范围等）
+                "policy" => json_encode($policy)
+            ]);
+
+            // 4. 调用AssumeRole接口获取临时凭证
+            $response = $client->assumeRole($assumeRoleRequest);
+
+            // 5. 解析响应结果
+            $credentials = $response->body->credentials;
+            return [
+                'accessKeyId' => $credentials->accessKeyId,
+                'accessKeySecret' => $credentials->accessKeySecret,
+                'expiration' => $credentials->expiration,
+                'securityToken' => $credentials->securityToken,
+            ];
+        } catch (\Exception $error) {
+            // 错误处理
+            if (!($error instanceof TeaError)) {
+                $error = new TeaError([], $error->getMessage(), $error->getCode(), $error);
+            }
+            throw $error;
+        }
+    }
+
+    /**
+     * 表单直传
+     * @param string path 要上传的路径
+     * @param int maxSize 文件大小约束，默认10M
+     * @param int minSize 文件大小约束，默认0
+     * @param int durationSeconds 有效期
+     * @param array contentType 文件类型约束
+     * @param array contentType 文件类型约束
+     * @param array extraCondition 额外的条件
+     * @see https://help.aliyun.com/zh/oss/developer-reference/signature-version-4-recommend
+     */
+    public function formUploadV1(
+        string $path,
+        int $maxSize = 10485760, //
+        int $minSize = 0,
+        int $durationSeconds = 3600, //1h
+        array $contentType = ["image/jpg", "image/png", "image/jpeg"],
+        array $extraCondition = [],
+    ){
+        $expireTime = time() + $durationSeconds;
+        $expiration = gmdate('Y-m-d\TH:i:s\Z', $expireTime);
+        $bucket = $this->config['bucket'];
+        $endpoint = $this->config['endpoint'];
+        $accessKeyId = $this->config['access_key_id'];
+        $accessKeySecret = $this->config['access_key_secret'];
+
+        $key = $this->prefixer->prefixPath($path);
+        $condition = [
+                ["eq",'$bucket', $this->config['bucket']],  // 限制上传到指定Bucket
+                ["starts-with", '$key', $this->config['prefix']],  // 限制上传路径前缀
+                ["content-length-range", $minSize, $maxSize],  // 限制文件大小范围
+                ["in", '$content-type', $contentType], // 仅允许图片类型
+        ];
+        if($extraCondition){
+            $condition = array_merge($condition, $extraCondition);
+        }
+        //构建Post Policy内容
+        $policy = [
+            "expiration" => $expiration,  // 过期时间
+            "conditions" => $condition,
+        ];
+
+        //对Policy进行Base64编码
+        $policyBase64 = base64_encode(json_encode($policy, JSON_UNESCAPED_SLASHES));
+
+        //使用AccessKeySecret对Policy进行HMAC-SHA1签名
+        $signature = base64_encode(hash_hmac('sha1', $policyBase64, $accessKeySecret, true));
+
+        //生成客户端上传所需的参数
+        $uploadParams = [
+            'host' => "https://{$bucket}.{$endpoint}", // OSS上传地址
+            'policy' => $policyBase64,
+            'signature' => $signature,
+            'accessKeyId' => $accessKeyId,
+            'key' => $key, // 上传后的文件路径
+            'expire' => $expireTime,
+            'maxSize' => $maxSize,
+        ];
+        return $uploadParams;
+    }
+
+    /**
+     * 使用STS表单直传
+     * @param string path 要上传的路径
+     * @param int maxSize 文件大小约束，默认10M
+     * @param int minSize 文件大小约束，默认0
+     * @param int durationSeconds 有效期
+     * @param array contentType 文件类型约束
+     * @param array contentType 文件类型约束
+     * @param array extraCondition 额外的条件
+     * @see https://help.aliyun.com/zh/oss/developer-reference/signature-version-4-recommend
+     */
+    public function formUploadV4(
+        string $path,
+        int $maxSize = 10485760, //
+        int $minSize = 0,
+        int $durationSeconds = 3600, //1h
+        array $contentType = ["image/jpg", "image/png", "image/jpeg"],
+        array $extraCondition = [],
+        string $callbackUrl = '',
+        bool $sts = false,
+    ){
+        if($sts){
+            $tokenData = $this->sts($durationSeconds);
+        }else{
+            $expireTime = time() + $durationSeconds;
+            $expiration = gmdate('Y-m-d\TH:i:s\Z', $expireTime);
+            $tokenData = [
+                'accessKeyId' => $this->config['access_key_id'],
+                'accessKeySecret' => $this->config['access_key_secret'],
+                'expiration' => $expiration,
+                'securityToken' => '',
+            ];
+        }
+        $bucket = $this->config['bucket'];
+        $endpoint = $this->config['endpoint'];
+        $tempAccessKeyId = $tokenData['accessKeyId'];
+        $tempAccessKeySecret = $tokenData['accessKeySecret'];
+        $securityToken = $tokenData['securityToken'];
+        $expiration = $tokenData['expiration'];
+        $now = time();
+        $dtObj = gmdate('Ymd\THis\Z', $now);
+        $dtObj1 = gmdate('Ymd', $now);
+        $key = $this->prefixer->prefixPath($path);
+        $condition = [
+                ["eq",'$bucket', $this->config['bucket']],  // 限制上传到指定Bucket
+                ["starts-with", '$key', $this->config['prefix']],  // 限制上传路径前缀
+                ["content-length-range", $minSize, $maxSize],  // 限制文件大小范围
+                ["in", '$content-type', $contentType], // 仅允许图片类型
+                ["x-oss-signature-version" => "OSS4-HMAC-SHA256"],
+                ["x-oss-credential" => "{$tempAccessKeyId}/{$dtObj1}/{$this->config['region']}/oss/aliyun_v4_request"],
+                ["x-oss-date" => $dtObj],
+        ];
+        if($sts){
+            $condition[] = ["x-oss-security-token" => $securityToken];
+        }
+        if($extraCondition){
+            $condition = array_merge($condition, $extraCondition);
+        }
+        //构建Post Policy内容
+        $policy = [
+            "expiration" => $expiration,  // 过期时间
+            "conditions" => $condition,
+        ];
+
+        $policyStr = json_encode($policy);
+
+        // 构造待签名字符串
+        $stringToSign = base64_encode($policyStr);
+
+        // 计算SigningKey
+        $dateKey = self::hmacsha256(('aliyun_v4' . $tempAccessKeySecret), $dtObj1);
+        $dateRegionKey = self::hmacsha256($dateKey, $this->config['region']);
+        $dateRegionServiceKey = self::hmacsha256($dateRegionKey, 'oss');
+        $signingKey = self::hmacsha256($dateRegionServiceKey, 'aliyun_v4_request');
+
+        // 计算Signature
+        $result = self::hmacsha256($signingKey, $stringToSign);
+        $signature = bin2hex($result);
+
+        $callback_param = array(
+            'callbackUrl' => $callbackUrl,
+            'callbackBody' => 'filename=${object}&size=${size}&mimeType=${mimeType}&height=${imageInfo.height}&width=${imageInfo.width}',
+            'callbackBodyType' => "application/x-www-form-urlencoded"
+        );
+        $callback_string = json_encode($callback_param);
+
+        $base64_callback_body = base64_encode($callback_string);
+
+        // 返回签名数据
+        $uploadParams = [
+            'policy' => $stringToSign,
+            'x_oss_signature_version' => "OSS4-HMAC-SHA256",
+            'x_oss_credential' => "{$tempAccessKeyId}/{$dtObj1}/{$this->config['region']}/oss/aliyun_v4_request",
+            'x_oss_date' => $dtObj,
+            'signature' => $signature,
+            'host' => "https://{$bucket}.{$endpoint}",
+            'security_token' => $securityToken,
+            'callback' => $base64_callback_body,
+            'key' => $key,
+            'expire' => $expiration,
+            'maxSize' => $maxSize,
+        ];
+        return $uploadParams;
+    }
+
+    static function hmacsha256($key, $data) {
+        return hash_hmac('sha256', $data, $key, true);
     }
 }
