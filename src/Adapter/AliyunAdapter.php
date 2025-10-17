@@ -605,7 +605,7 @@ class AliyunAdapter implements FilesystemAdapter
         $accessKeyId = $this->config['access_key_id'];
         $accessKeySecret = $this->config['access_key_secret'];
 
-        $key = $this->prefixer->prefixPath($path);
+        $dir = $this->prefixer->prefixPath($path);
         $condition = [
                 ["eq",'$bucket', $this->config['bucket']],  // 限制上传到指定Bucket
                 ["starts-with", '$key', $this->config['prefix']],  // 限制上传路径前缀
@@ -633,7 +633,7 @@ class AliyunAdapter implements FilesystemAdapter
             'policy' => $policyBase64,
             'signature' => $signature,
             'accessKeyId' => $accessKeyId,
-            'key' => $key, // 上传后的文件路径
+            'dir' => $dir, // 上传后的文件路径
             'expire' => $expireTime,
             'maxSize' => $maxSize,
         ];
