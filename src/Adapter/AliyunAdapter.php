@@ -682,7 +682,7 @@ class AliyunAdapter implements FilesystemAdapter
         $now = time();
         $dtObj = gmdate('Ymd\THis\Z', $now);
         $dtObj1 = gmdate('Ymd', $now);
-        $key = $this->prefixer->prefixPath($path);
+        $dir = $this->prefixer->prefixPath($path);
         $condition = [
                 ["eq",'$bucket', $this->config['bucket']],  // 限制上传到指定Bucket
                 ["starts-with", '$key', $this->config['prefix']],  // 限制上传路径前缀
@@ -738,7 +738,7 @@ class AliyunAdapter implements FilesystemAdapter
             'host' => "https://{$bucket}.{$endpoint}",
             'security_token' => $securityToken,
             'callback' => $base64_callback_body,
-            'key' => $key,
+            'dir' => $dir,
             'expire' => $expiration,
             'maxSize' => $maxSize,
         ];
