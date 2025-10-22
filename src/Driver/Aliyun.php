@@ -2,13 +2,15 @@
 
 namespace think\filesystem\driver;
 
-use DateTime;
 use think\filesystem\Driver;
 use Sessel\ThinkphpOssFilesystem\Adapter\AliyunAdapter;
+use Sessel\ThinkphpOssFilesystem\DriverExtend;
 use League\Flysystem\FilesystemAdapter;
 
 class Aliyun extends Driver
 {
+    use DriverExtend;
+
     private $adapter;
 
     /**
@@ -30,6 +32,8 @@ class Aliyun extends Driver
         'error_handler' => null,
     ];
 
+    protected $required = ['bucket', 'access_key_id', 'access_key_secret', 'endpoint'];
+
     public function __construct(array $config)
     {
 
@@ -46,36 +50,5 @@ class Aliyun extends Driver
     protected function createAdapter(): FilesystemAdapter
     {
         return $this->adapter = new AliyunAdapter($this->config);
-    }
-
-    public function getAdapter(){
-        return $this->adapter;
-    }
-
-    public function url(string $path, int $expires = 0, $config = []): string
-    {
-        if($expires > 0){
-            $datetime = sprintf('+%d seconds', $expires);
-            return $this->filesystem->temporaryUrl($path, new DateTime($datetime), $config);
-        }
-        return $this->filesystem->publicUrl($path, $config);
-    }
-
-    protected function validateConfig(): void
-    {
-        $required = ['bucket', 'access_key_id', 'access_key_secret', 'endpoint'];
-        foreach ($required as $key) {
-            if (empty($this->config[$key])) {
-                throw new \InvalidArgumentException("Config key '{$key}' is required");
-            }
-        }
-    }
-
-    public function getConfig(null|string $key = null, mixed $default = null): mixed
-    {
-        if(empty($key)){
-            return $this->config;
-        }
-        return $this->config[$key] ?? $default;
     }
 }

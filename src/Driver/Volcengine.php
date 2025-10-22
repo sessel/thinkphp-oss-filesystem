@@ -6,11 +6,11 @@ use DateTime;
 use League\Flysystem\FilesystemAdapter;
 use think\filesystem\Driver;
 use Sessel\ThinkphpOssFilesystem\Adapter\VolcengineAdapter;
-use Sessel\ThinkphpOssFilesystem\HandleException;
+use Sessel\ThinkphpOssFilesystem\DriverExtend;
 
 class Volcengine extends Driver
 {
-    use HandleException;
+    use DriverExtend;
 
     private $adapter;
 
@@ -31,6 +31,8 @@ class Volcengine extends Driver
         'max_retries' => 3,
         'error_handler' => null,
     ];
+
+    protected $required = ['ak', 'sk', 'region', 'bucket'];
 
     public function __construct(array $config)
     {
@@ -54,39 +56,8 @@ class Volcengine extends Driver
         return $adapter;
     }
 
-    public function url(string $path, int $expires = 0, $config = []): string
-    {
-        if($expires > 0){
-            $datetime = sprintf('+%d seconds', $expires);
-            return $this->filesystem->temporaryUrl($path, new DateTime($datetime), $config);
-        }
-        return $this->filesystem->publicUrl($path);
-    }
-
     public function __call($method, $parameters)
     {
         return $this->filesystem->$method(...$parameters);
-    }
-
-    public function getAdapter(){
-        return $this->adapter;
-    }
-
-    protected function validateConfig(): void
-    {
-        $required = ['ak', 'sk', 'region', 'bucket'];
-        foreach ($required as $key) {
-            if (empty($this->config[$key])) {
-                throw new \InvalidArgumentException("Config key '{$key}' is required");
-            }
-        }
-    }
-
-    public function getConfig(null|string $key = null, mixed $default = null): mixed
-    {
-        if(empty($key)){
-            return $this->config;
-        }
-        return $this->config[$key] ?? $default;
     }
 }
