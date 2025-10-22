@@ -414,20 +414,13 @@ class AliyunAdapter implements FilesystemAdapter, PublicUrlGenerator, TemporaryU
     }
 
     /**
-     * 获取文件的公共访问URL
-     */
-    public function getUrl(string $path): string
-    {
-        $fullPath = $this->prefixer->prefixPath($path);
-        return $this->getCdnDomain() . '/' . ltrim($fullPath, '/');
-    }
-
-    /**
      * 获取文件的临时访问URL
      */
-    public function getTemporaryUrl(string $path, DateTimeInterface $expiration): string
+    public function getTemporaryUrl(string $path, DateTimeInterface $expiration, Config $config): string
     {
-        $key = $this->prefixer->prefixPath($path);
+        if($config->get('with_prefix', true)){
+            $key = $this->prefixer->prefixPath($path);
+        }
         // 创建GetObjectRequest对象，用于下载对象
         $request = new GetObjectRequest($this->config['bucket'], $key);
 
@@ -438,12 +431,15 @@ class AliyunAdapter implements FilesystemAdapter, PublicUrlGenerator, TemporaryU
 
     public function publicUrl(string $path, Config $config): string
     {
-        return $this->getUrl($path);
+        if($config->get('with_prefix', true)){
+            $path = $this->prefixer->prefixPath($path);
+        }
+        return $this->getCdnDomain() . '/' . ltrim($path, '/');
     }
 
     public function temporaryUrl(string $path, DateTimeInterface $expiresAt, Config $config): string
     {
-        return $this->getTemporaryUrl($path, $expiresAt);
+        return $this->getTemporaryUrl($path, $expiresAt, $config);
     }
 
     public function getEndpoint(): string

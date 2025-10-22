@@ -58,7 +58,7 @@ class Aliyun extends Driver
             $datetime = sprintf('+%d seconds', $expires);
             return $this->filesystem->temporaryUrl($path, new DateTime($datetime), $config);
         }
-        return $this->filesystem->publicUrl($path);
+        return $this->filesystem->publicUrl($path, $config);
     }
 
     protected function validateConfig(): void
