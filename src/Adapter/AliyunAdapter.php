@@ -18,6 +18,7 @@ use AlibabaCloud\Oss\V2\Config as AliyunOssConfig;
 use AlibabaCloud\SDK\Sts\V20150401\Sts;
 use AlibabaCloud\Tea\Exception\TeaError;
 use Darabonba\OpenApi\Models\Config as ModelConfig;
+use DateTimeInterface;
 use League\Flysystem\Config;
 use League\Flysystem\FileAttributes;
 use League\Flysystem\FilesystemAdapter;
@@ -32,10 +33,12 @@ use League\Flysystem\UnableToReadFile;
 use League\Flysystem\UnableToRetrieveMetadata;
 use League\Flysystem\UnableToSetVisibility;
 use League\Flysystem\UnableToWriteFile;
+use League\Flysystem\UrlGeneration\PublicUrlGenerator;
+use League\Flysystem\UrlGeneration\TemporaryUrlGenerator;
 use League\Flysystem\Visibility;
 use Sessel\ThinkphpOssFilesystem\HandleException;
 
-class AliyunAdapter implements FilesystemAdapter
+class AliyunAdapter implements FilesystemAdapter, PublicUrlGenerator, TemporaryUrlGenerator
 {
     use HandleException;
 
@@ -416,21 +419,31 @@ class AliyunAdapter implements FilesystemAdapter
     public function getUrl(string $path): string
     {
         $fullPath = $this->prefixer->prefixPath($path);
-        return $this->getEndpoint() . '/' . ltrim($fullPath, '/');
+        return $this->getCdnDomain() . '/' . ltrim($fullPath, '/');
     }
 
     /**
      * 获取文件的临时访问URL
      */
-    public function getTemporaryUrl(string $path, int $expiration = 3600): string
+    public function getTemporaryUrl(string $path, DateTimeInterface $expiration): string
     {
         $key = $this->prefixer->prefixPath($path);
         // 创建GetObjectRequest对象，用于下载对象
         $request = new GetObjectRequest($this->config['bucket'], $key);
 
         // 调用presign方法生成预签名URL
-        $result = $this->client->presign($request);
+        $result = $this->client->presign($request, ['expiration' => $expiration]);
         return $result->url;
+    }
+
+    public function publicUrl(string $path, Config $config): string
+    {
+        return $this->getUrl($path);
+    }
+
+    public function temporaryUrl(string $path, DateTimeInterface $expiresAt, Config $config): string
+    {
+        return $this->getTemporaryUrl($path, $expiresAt);
     }
 
     public function getEndpoint(): string
@@ -450,7 +463,7 @@ class AliyunAdapter implements FilesystemAdapter
         }
 
         $protocol = $this->config['use_ssl'] ? 'https' : 'http';
-        return "{$protocol}://{$this->config['bucket']}.{$this->config['region']}.aliyuncs.com";
+        return "{$protocol}://{$this->config['bucket']}.oss-{$this->config['region']}.aliyuncs.com";
     }
 
     public function getCdnDomain(): string

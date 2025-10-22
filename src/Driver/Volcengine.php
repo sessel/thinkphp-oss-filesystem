@@ -57,7 +57,7 @@ class Volcengine extends Driver
     public function url(string $path, int $expires = 0, $config = []): string
     {
         if($expires > 0){
-            $datetime = sprintf('+%d seconds');
+            $datetime = sprintf('+%d seconds', $expires);
             return $this->filesystem->temporaryUrl($path, new DateTime($datetime), $config);
         }
         return $this->filesystem->publicUrl($path);

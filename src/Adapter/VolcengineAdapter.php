@@ -26,6 +26,7 @@ use League\Flysystem\UnableToReadFile;
 use League\Flysystem\UnableToRetrieveMetadata;
 use League\Flysystem\UnableToWriteFile;
 use League\Flysystem\UrlGeneration\PublicUrlGenerator;
+use League\Flysystem\UrlGeneration\TemporaryUrlGenerator;
 use League\Flysystem\Visibility;
 use Tos\TosClient;
 use Tos\Exception\TosClientException;
@@ -50,7 +51,7 @@ use Tos\Model\UploadPartInput;
 use Sessel\ThinkphpOssFilesystem\OssFilesystemException;
 use Sessel\ThinkphpOssFilesystem\HandleException;
 
-class VolcengineAdapter implements FilesystemAdapter, PublicUrlGenerator
+class VolcengineAdapter implements FilesystemAdapter, PublicUrlGenerator, TemporaryUrlGenerator
 {
     use HandleException;
 
@@ -818,7 +819,7 @@ class VolcengineAdapter implements FilesystemAdapter, PublicUrlGenerator
         return $this->getUrl($path);
     }
 
-    public function temporaryUrl(string $path, DateTimeInterface $expiresAt, array $config = []): string
+    public function temporaryUrl(string $path, DateTimeInterface $expiresAt, Config $config): string
     {
         $expires = $expiresAt->getTimestamp() - time();
         return $this->getUrl($path, $expires);
@@ -846,7 +847,7 @@ class VolcengineAdapter implements FilesystemAdapter, PublicUrlGenerator
             return $this->getPresignedUrl($path, 'GET', $expires);
         }
         // 标准URL
-        $protocol = $this->config['protocol'] ? (strpos($this->config['endpoint'], 'https') === 0 ? 'https' : 'http') : 'https';
+        $protocol = $this->config['endpoint'] ? (strpos($this->config['endpoint'], 'https') === 0 ? 'https' : 'http') : 'https';
         $domain = $this->config['domain'] ?: "{$this->bucket}.tos-{$this->config['region']}.volces.com";
         return "{$protocol}://{$domain}/" . ltrim($key, '/');
     }

@@ -2,6 +2,7 @@
 
 namespace think\filesystem\driver;
 
+use DateTime;
 use think\filesystem\Driver;
 use Sessel\ThinkphpOssFilesystem\Adapter\AliyunAdapter;
 use League\Flysystem\FilesystemAdapter;
@@ -49,6 +50,15 @@ class Aliyun extends Driver
 
     public function getAdapter(){
         return $this->adapter;
+    }
+
+    public function url(string $path, int $expires = 0, $config = []): string
+    {
+        if($expires > 0){
+            $datetime = sprintf('+%d seconds', $expires);
+            return $this->filesystem->temporaryUrl($path, new DateTime($datetime), $config);
+        }
+        return $this->filesystem->publicUrl($path);
     }
 
     protected function validateConfig(): void
