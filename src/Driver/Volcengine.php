@@ -81,4 +81,12 @@ class Volcengine extends Driver
             }
         }
     }
+
+    public function getConfig(null|string $key = null, mixed $default = null): mixed
+    {
+        if(empty($key)){
+            return $this->config;
+        }
+        return $this->config[$key] ?? $default;
+    }
 }
