@@ -47,4 +47,15 @@ trait DriverExtend
             call_user_func($this->config['error_handler'], $e, $path);
         }
     }
+
+    public function removePrefix(string $path): string
+    {
+        $prefix = $this->config['prefix'];
+        return str_replace("{$prefix}/", '', ltrim($path, '\\/'));
+    }
+
+    public function prefixPath(string $path): string
+    {
+        return $this->config['prefix'] . ltrim($path, '\\/');
+    }
 }
