@@ -6,8 +6,6 @@ use DateTime;
 
 trait DriverExtend
 {
-    protected $required = [];
-
     protected function validateConfig(): void
     {
         foreach ($this->required as $key) {
