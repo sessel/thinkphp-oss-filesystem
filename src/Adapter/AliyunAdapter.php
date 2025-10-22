@@ -419,10 +419,10 @@ class AliyunAdapter implements FilesystemAdapter, PublicUrlGenerator, TemporaryU
     public function getTemporaryUrl(string $path, DateTimeInterface $expiration, Config $config): string
     {
         if($config->get('with_prefix', true)){
-            $key = $this->prefixer->prefixPath($path);
+            $path = $this->prefixer->prefixPath($path);
         }
         // 创建GetObjectRequest对象，用于下载对象
-        $request = new GetObjectRequest($this->config['bucket'], $key);
+        $request = new GetObjectRequest($this->config['bucket'], $path);
 
         // 调用presign方法生成预签名URL
         $result = $this->client->presign($request, ['expiration' => $expiration]);
