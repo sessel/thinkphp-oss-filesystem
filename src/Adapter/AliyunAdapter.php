@@ -15,6 +15,9 @@ use AlibabaCloud\Oss\V2\Models\ObjectAclRequest;
 use AlibabaCloud\Oss\V2\Models\PutObjectAclRequest;
 use AlibabaCloud\Oss\V2\Credentials\StaticCredentialsProvider;
 use AlibabaCloud\Oss\V2\Config as AliyunOssConfig;
+use AlibabaCloud\Oss\V2\Credentials\EnvironmentVariableCredentialsProvider;
+use AlibabaCloud\Oss\V2\Defaults;
+use AlibabaCloud\Oss\V2\Models\ProcessObjectRequest;
 use AlibabaCloud\SDK\Sts\V20150401\Sts;
 use AlibabaCloud\Tea\Exception\TeaError;
 use Darabonba\OpenApi\Models\Config as ModelConfig;
@@ -55,28 +58,9 @@ class AliyunAdapter implements FilesystemAdapter, PublicUrlGenerator, TemporaryU
         );
 
         $config['credentials'] = $credentials;
-        $cfg = new AliyunOssConfig(
-            region: $config['region'],
-            endpoint: $config['endpoint'],
-            credentialsProvider: $credentials,
-            signatureVersion: $config['signatureVersion'] ?? null,
-            disableSSL: $config['disableSSL'] ?? null,
-            insecureSkipVerify: $config['insecureSkipVerify'] ?? null,
-            connectTimeout: $config['connectTimeout'] ?? null,
-            readwriteTimeout: $config['readwriteTimeout'] ?? null,
-            proxyHost: $config['proxyHost'] ?? null,
-            useDualStackEndpoint: $config['useDualStackEndpoint'] ?? null,
-            useAccelerateEndpoint: $config['useAccelerateEndpoint'] ?? null,
-            useInternalEndpoint: $config['useInternalEndpoint'] ?? null,
-            useCname: $config['useCname'] ?? null,
-            usePathStyle: $config['usePathStyle'] ?? null,
-            retryMaxAttempts: $config['retryMaxAttempts'] ?? null,
-            retryer: $config['retryer'] ?? null,
-            userAgent: $config['userAgent'] ?? null,
-            additionalHeaders: $config['additionalHeaders'] ?? null,
-            cloudBoxId: $config['cloudBoxId'] ?? null,
-            enableAutoDetectCloudBoxId: $config['enableAutoDetectCloudBoxId'] ?? null,
-        );
+        $cfg = AliyunOssConfig::loadDefault();
+        $cfg->setRegion($config['region']);
+        $cfg->setCredentialsProvider($credentials);
         $this->client = new Client($cfg);
 
         $this->config = $config;
@@ -418,14 +402,19 @@ class AliyunAdapter implements FilesystemAdapter, PublicUrlGenerator, TemporaryU
      */
     public function getTemporaryUrl(string $path, DateTimeInterface $expiration, Config $config): string
     {
-        if($config->get('with_prefix', true)){
-            $path = $this->prefixer->prefixPath($path);
-        }
+        $path = $this->prefixer->prefixPath($path);
+
         // 创建GetObjectRequest对象，用于下载对象
-        $request = new GetObjectRequest($this->config['bucket'], $path);
+        $process = $config->get('process');
+        if($process){
+            $request = new GetObjectRequest(bucket: $this->config['bucket'], key: $path, process: $process);
+        }else{
+            $request = new GetObjectRequest($this->config['bucket'], $path);
+        }
+        $options = ['expiration' => $expiration];
 
         // 调用presign方法生成预签名URL
-        $result = $this->client->presign($request, ['expiration' => $expiration]);
+        $result = $this->client->presign($request, $options);
         return $result->url;
     }
 
@@ -444,12 +433,11 @@ class AliyunAdapter implements FilesystemAdapter, PublicUrlGenerator, TemporaryU
 
     public function getEndpoint(): string
     {
-        if ($this->config['endpoint']) {
-            return $this->config['endpoint'];
-        }
-
         $protocol = $this->config['use_ssl'] ? 'https' : 'http';
-        return "{$protocol}://{$this->config['region']}.aliyuncs.com";
+        if ($this->config['endpoint']) {
+            return "{$protocol}://{$this->config['endpoint']}";
+        }
+        return "{$protocol}://oss.{$this->config['region']}.aliyuncs.com";
     }
 
     public function getBucketDomain(): string
@@ -467,48 +455,48 @@ class AliyunAdapter implements FilesystemAdapter, PublicUrlGenerator, TemporaryU
         return $this->config['cdn_url'] ? rtrim($this->config['cdn_url'], '/') : $this->getBucketDomain();
     }
 
-    // public function getStsToken(int $durationSeconds = 3600){
-    //     // Constants
-    //     $StsSignVersion = "1.0";
-    //     $StsAPIVersion = "2015-04-01";
-    //     $StsHost = "https://sts.aliyuncs.com/";
-    //     $TimeFormat = "Y-m-d\TH:i:s\Z";
-    //     $RespBodyFormat = "JSON";
-    //     $PercentEncode = "%2F";
-    //     $HTTPGet = "GET";
-    //     $uuid = "Nonce-" . rand(1000, 9999);
-    //     $currentTime = (new \DateTime('now', new \DateTimeZone('UTC')))->format($TimeFormat);
-    //     $queryStr = http_build_query([
-    //         "SignatureVersion" => $StsSignVersion,
-    //         "Format" => $RespBodyFormat,
-    //         "Timestamp" => $currentTime,
-    //         "RoleArn" => $this->config['ram_role_arn'],
-    //         "RoleSessionName" => "oss_test_sess",
-    //         "AccessKeyId" => $this->config['access_key_id'],
-    //         "SignatureMethod" => "HMAC-SHA1",
-    //         "Version" => $StsAPIVersion,
-    //         "Action" => "AssumeRole",
-    //         "SignatureNonce" => $uuid,
-    //         "DurationSeconds" => $durationSeconds
-    //     ]);
-    //     parse_str($queryStr, $queryParams);
-    //     ksort($queryParams);
-    //     $queryStr = http_build_query($queryParams);
-    //     $strToSign = $HTTPGet . "&" . $PercentEncode . "&" . rawurlencode($queryStr);
-    //     $signature = base64_encode(hash_hmac('sha1', $strToSign, $this->config['access_key_secret'] . "&", true));
-    //     $assumeURL = $StsHost . "?" . $queryStr . "&Signature=" . urlencode($signature);
-    //     $httpClient = new \GuzzleHttp\Client();
-    //     try {
-    //         $resp = $httpClient->get($assumeURL);
-    //         $result = json_decode($resp->getBody()->getContents(), true);
-    //         if (json_last_error() !== JSON_ERROR_NONE) {
-    //             throw new \Exception("Failed to decode JSON response");
-    //         }
-    //         return $result;
-    //     } catch (\Throwable $e) {
-    //         throw $e;
-    //     }
-    // }
+    public function getStsToken(int $durationSeconds = 3600, $roleSessionName = "oss_test_sess"){
+        // Constants
+        $StsSignVersion = "1.0";
+        $StsAPIVersion = "2015-04-01";
+        $StsHost = "https://sts.aliyuncs.com/";
+        $TimeFormat = "Y-m-d\TH:i:s\Z";
+        $RespBodyFormat = "JSON";
+        $PercentEncode = "%2F";
+        $HTTPGet = "GET";
+        $uuid = "Nonce-" . rand(1000, 9999);
+        $currentTime = (new \DateTime('now', new \DateTimeZone('UTC')))->format($TimeFormat);
+        $queryStr = http_build_query([
+            "SignatureVersion" => $StsSignVersion,
+            "Format" => $RespBodyFormat,
+            "Timestamp" => $currentTime,
+            "RoleArn" => $this->config['ram_role_arn'],
+            "RoleSessionName" => $roleSessionName,
+            "AccessKeyId" => $this->config['access_key_id'],
+            "SignatureMethod" => "HMAC-SHA1",
+            "Version" => $StsAPIVersion,
+            "Action" => "AssumeRole",
+            "SignatureNonce" => $uuid,
+            "DurationSeconds" => $durationSeconds
+        ]);
+        parse_str($queryStr, $queryParams);
+        ksort($queryParams);
+        $queryStr = http_build_query($queryParams);
+        $strToSign = $HTTPGet . "&" . $PercentEncode . "&" . rawurlencode($queryStr);
+        $signature = base64_encode(hash_hmac('sha1', $strToSign, $this->config['access_key_secret'] . "&", true));
+        $assumeURL = $StsHost . "?" . $queryStr . "&Signature=" . urlencode($signature);
+        $httpClient = new \GuzzleHttp\Client();
+        try {
+            $resp = $httpClient->get($assumeURL);
+            $result = json_decode($resp->getBody()->getContents(), true);
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                throw new \Exception("Failed to decode JSON response");
+            }
+            return $result;
+        } catch (\Throwable $e) {
+            throw $e;
+        }
+    }
 
     /**
      * 获取STS令牌
@@ -756,5 +744,17 @@ class AliyunAdapter implements FilesystemAdapter, PublicUrlGenerator, TemporaryU
 
     static function hmacsha256($key, $data) {
         return hash_hmac('sha256', $data, $key, true);
+    }
+
+    public function getVideoInfo(string $path){
+        try{
+            $path = $this->prefixer->prefixPath($path);
+            $request = new GetObjectRequest(bucket: $this->config['bucket'], key: $path, process: "video/info");
+            $result = $this->client->getObject($request);
+            return json_decode((string) $result->body, true);
+        } catch (\Exception $e) {
+            $this->handleException($e, $path);
+            throw new UnableToRetrieveMetadata("Unable to retrieve file metadata for path: {$path}. " . $e->getMessage());
+        }
     }
 }

@@ -2,10 +2,13 @@
 
 namespace Sessel\ThinkphpOssFilesystem;
 
+use BadMethodCallException;
 use DateTime;
 
 trait DriverExtend
 {
+    protected $methods = [];
+
     protected function validateConfig(): void
     {
         foreach ($this->required as $key) {
@@ -45,5 +48,20 @@ trait DriverExtend
     public function prefixPath(string $path): string
     {
         return $this->config['prefix'] . ltrim($path, '\\/');
+    }
+
+    public function extend(string $method, callable $callback)
+    {
+        $this->methods[$method] = $callback;
+        return $this;
+    }
+
+    public function __call($method, $parameters)
+    {
+        $callble = $this->methods[$method] ?? null;
+        if($callble){
+           return call_user_func($callble, ...$parameters);
+        }
+        return $this->filesystem->$method(...$parameters);
     }
 }

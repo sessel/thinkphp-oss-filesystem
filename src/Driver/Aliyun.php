@@ -41,6 +41,7 @@ class Aliyun extends Driver
         $this->validateConfig();
         $this->adapter = $this->createAdapter();
         $this->filesystem = $this->createFilesystem($this->adapter);
+        $this->extend('getVideoInfo', [$this->adapter, 'getVideoInfo'](...));
     }
 
     /**
