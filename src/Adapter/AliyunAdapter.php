@@ -750,8 +750,10 @@ class AliyunAdapter implements FilesystemAdapter, PublicUrlGenerator, TemporaryU
         try{
             $path = $this->prefixer->prefixPath($path);
             $request = new GetObjectRequest(bucket: $this->config['bucket'], key: $path, process: "video/info");
-            $result = $this->client->getObject($request);
-            return json_decode((string) $result->body, true);
+            $signResult = $this->client->presign($request);
+            $httpClient = new \GuzzleHttp\Client();
+            $response = $httpClient->get($signResult->url);
+            return json_decode((string) $response->getBody(), true);
         } catch (\Exception $e) {
             $this->handleException($e, $path);
             throw new UnableToRetrieveMetadata("Unable to retrieve file metadata for path: {$path}. " . $e->getMessage());
