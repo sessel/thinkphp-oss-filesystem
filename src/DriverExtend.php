@@ -42,7 +42,13 @@ trait DriverExtend
     public function removePrefix(string $path): string
     {
         $prefix = $this->config['prefix'];
-        return str_replace("{$prefix}/", '', ltrim($path, '\\/'));
+        if(empty($prefix)){
+            return ltrim($path, '\\/');
+        }
+        if(strpos("{$prefix}/", $path) === 0){
+            return str_replace("{$prefix}/", '', ltrim($path, '\\/'));
+        }
+        return $path;
     }
 
     public function prefixPath(string $path): string
